@@ -14,7 +14,7 @@ namespace PassthroughCameraSamples
     {
         [SerializeField] public PassthroughCameraEye Eye = PassthroughCameraEye.Left;
         [SerializeField, Tooltip("The requested resolution of the camera may not be supported by the chosen camera. In such cases, the closest available values will be used.\n\n" +
-                                 "When set to (0,0), the highest supported resolution will be used.")]
+                                 "When set to (0,0), the highest supported resolution will be used. Available resolutions are: 320 x 240, 640 x 480, 800 x 600 and 1280 x 960")]
         public Vector2Int RequestedResolution;
         [SerializeField] public PassthroughCameraPermissions CameraPermissions;
 
@@ -134,4 +134,5 @@ namespace PassthroughCameraSamples
         Left,
         Right
     }
+
 }

@@ -10,9 +10,6 @@ using System.Threading;
 public class AprilTagWrapper : MonoBehaviour
 {
     [DllImport("apriltagnative")]
-    private static extern IntPtr stringFromJNI();
-
-    [DllImport("apriltagnative")]
     private static extern void init_detector(float tagsize, float focalLengthX, float focalLengthY, float focalCenterX,
         float focalCenterY);
     

@@ -6,11 +6,11 @@ using System.Threading;
 using PassthroughCameraSamples;
 using TMPro;
 using UnityEngine;
-using UnityEngine.Serialization;
 using UnityEngine.UI;
 using Matrix4x4 = UnityEngine.Matrix4x4;
 using Quaternion = UnityEngine.Quaternion;
 using Vector3 = UnityEngine.Vector3;
+using Vector2 = UnityEngine.Vector2;
 
 public class AprilTagReader : MonoBehaviour
 {
@@ -52,9 +52,19 @@ public class AprilTagReader : MonoBehaviour
         m_image.texture = m_webCamTextureManager.WebCamTexture;
         intrinsics = PassthroughCameraUtils.GetCameraIntrinsics(m_webCamTextureManager.Eye);
         tex = m_webCamTextureManager.WebCamTexture;
+        
+        Vector2Int referenceResolution = new Vector2Int(1280, 960);
+        var camRes = new Vector2(tex.width, tex.height);
 
-        m_aprilTagWrapper.Init(tagSize, intrinsics.FocalLength.x, intrinsics.FocalLength.y, intrinsics.PrincipalPoint.x,
-            intrinsics.PrincipalPoint.y);
+        float scaleX = camRes.x / referenceResolution.x;
+        float scaleY = camRes.y / referenceResolution.y;
+
+        float fx = intrinsics.FocalLength.x * scaleX;
+        float fy = intrinsics.FocalLength.y * scaleY;
+        float cx = intrinsics.PrincipalPoint.x * scaleX;
+        float cy = intrinsics.PrincipalPoint.y * scaleY;
+
+        m_aprilTagWrapper.Init(tagSize, fx, fy, cx, cy);
         
         Debug.Log($"Focal Length : ({intrinsics.FocalLength.x}, {intrinsics.FocalLength.y})");
         Debug.Log($"Principal Point : ({intrinsics.PrincipalPoint.x}, {intrinsics.PrincipalPoint.y})");
@@ -79,6 +89,8 @@ public class AprilTagReader : MonoBehaviour
                 }
                 ConvertToByteArray(pixelCopy, rgbaBytes);
 
+                Debug.Log($"WebcamTexture Width {m_webCamTextureManager.WebCamTexture.width} Height {m_webCamTextureManager.WebCamTexture.height}");
+
                 var tags = m_aprilTagWrapper.GetLatestPoses(rgbaBytes, m_webCamTextureManager.WebCamTexture.width, m_webCamTextureManager.WebCamTexture.height);
 
                 lock (_resultLock) {
@@ -98,8 +110,6 @@ public class AprilTagReader : MonoBehaviour
         if (!running || tex == null || !tex.didUpdateThisFrame)
             return;
 
-        
-        
         lock (_frameLock) {
             latestPixels = tex.GetPixels32();
             int width = tex.width;
@@ -115,9 +125,11 @@ public class AprilTagReader : MonoBehaviour
         lock (_resultLock) {
             if (tagsUpdated && latestTags.Count > 0) {
                 
-                Vector3 tagPosInPassthrough = latestTags[0].position;
-
-                var invertedTagPos = new Vector3(tagPosInPassthrough.x, -tagPosInPassthrough.y, tagPosInPassthrough.z);
+                var invertedTagPos = new Vector3(latestTags[0].position.x, -latestTags[0].position.y, latestTags[0].position.z);
+                
+                var n_intrinsics = PassthroughCameraUtils.GetCameraIntrinsics(m_webCamTextureManager.Eye);
+                Debug.Log($"Focal Length : ({n_intrinsics.FocalLength.x}, {n_intrinsics.FocalLength.y})");
+                Debug.Log($"Principal Point : ({n_intrinsics.PrincipalPoint.x}, {n_intrinsics.PrincipalPoint.y})");
                 
                 Quaternion flippedRot = new Quaternion(
                     latestTags[0].rotation.x,
