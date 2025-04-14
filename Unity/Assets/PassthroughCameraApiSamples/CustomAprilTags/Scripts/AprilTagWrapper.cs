@@ -1,0 +1,94 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using UnityEngine;
+using Debug = UnityEngine.Debug;
+using System.Diagnostics;
+using System.Threading;
+
+public class AprilTagWrapper : MonoBehaviour
+{
+    [DllImport("apriltagnative")]
+    private static extern IntPtr stringFromJNI();
+
+    [DllImport("apriltagnative")]
+    private static extern void init_detector(float tagsize, float focalLengthX, float focalLengthY, float focalCenterX,
+        float focalCenterY);
+    
+    [DllImport("apriltagnative")]
+    private static extern int detect_apriltags(IntPtr imageData, int width, int height);
+    
+    [DllImport("apriltagnative")]
+    private static extern IntPtr get_latest_poses();
+    
+    Stopwatch sw = Stopwatch.StartNew();
+    List<AprilTagPose> poses = new();
+
+    public void Init(float tagsize, float focalLengthX, float focalLengthY, float focalCenterX,
+        float focalCenterY)
+    {
+        init_detector(tagsize,  focalLengthX,  focalLengthY,  focalCenterX, focalCenterY);
+    }
+
+    public int DetectAprilTags(byte[] image, int width, int height)
+    {
+        GCHandle handle = GCHandle.Alloc(image, GCHandleType.Pinned);
+        IntPtr ptr = handle.AddrOfPinnedObject();
+        int detected = detect_apriltags(ptr, width, height);
+        handle.Free();
+
+        return detected;
+    }
+
+    public List<AprilTagPose> GetLatestPoses(byte[] grayImage, int width, int height)
+    {
+        sw = Stopwatch.StartNew();
+        Debug.Log($"Start Get Latest Poses: {sw.Elapsed.TotalMilliseconds}");
+        poses = new List<AprilTagPose>();
+
+        Debug.Log($"Before Detect: {sw.Elapsed.TotalMilliseconds}");
+        int detected = DetectAprilTags(grayImage, width, height);
+        if (detected <= 0) return poses;
+        Debug.Log($"After Detect: {sw.Elapsed.TotalMilliseconds}");
+
+        IntPtr dataPtr = get_latest_poses();
+        double[] buffer = new double[detected];
+        Marshal.Copy(dataPtr, buffer, 0, detected);
+        int stride = 13;
+        
+        Debug.Log($"!!! --> Got Buffer {buffer.Length}");
+        for (int i = 0; i < buffer.Length; i += stride)
+        {
+            int id = (int)buffer[i];
+            Vector3 pos = new Vector3((float)buffer[i + 1], (float)buffer[i + 2], (float)buffer[i + 3]);
+            Matrix4x4 rot = new Matrix4x4();
+            rot.m00 = (float)buffer[i + 4];
+            rot.m01 = (float)buffer[i + 5];
+            rot.m02 = (float)buffer[i + 6];
+            rot.m10 = (float)buffer[i + 7];
+            rot.m11 = (float)buffer[i + 8];
+            rot.m12 = (float)buffer[i + 9];
+            rot.m20 = (float)buffer[i + 10];
+            rot.m21 = (float)buffer[i + 11];
+            rot.m22 = (float)buffer[i + 12];
+            rot.m33 = 1.0f;
+            
+            poses.Add(new AprilTagPose
+            {
+                id = id,
+                position = pos,
+                rotation = rot.rotation
+            });
+        }
+
+        return poses;
+    }
+}
+
+public struct AprilTagPose
+{
+    public int id;
+    public Vector3 position;
+    public Quaternion rotation;
+}
