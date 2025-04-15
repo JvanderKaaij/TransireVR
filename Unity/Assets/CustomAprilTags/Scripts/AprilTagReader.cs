@@ -37,7 +37,9 @@ public class AprilTagReader : MonoBehaviour
     private Color32[] latestPixels;
     private Vector3 targetPos;
     
-    private Vector3 camToWorldRotation = new(90, 180, 0);
+    private static Vector3 camToWorldRotation = new(90, 180, 0);
+    
+    private Dictionary<int, Pose> _tagsById = new();
     
     private IEnumerator Start()
     {
@@ -117,31 +119,10 @@ public class AprilTagReader : MonoBehaviour
         lock (_resultLock) {
             if (tagsUpdated && latestTags.Count > 0) {
                 
-                var invertedTagPos = new Vector3(latestTags[0].position.x, -latestTags[0].position.y, latestTags[0].position.z);
-
-                var invertedTagRot = new Quaternion(
-                    latestTags[0].rotation.x,
-                    -latestTags[0].rotation.y,
-                    latestTags[0].rotation.z,
-                    -latestTags[0].rotation.w
-                );
+                var tagPose = CamToWorld(latestTags[0], PassthroughCameraUtils.GetCameraPoseInWorld(m_webCamTextureManager.Eye));
                 
-                var tagPoseCam = Matrix4x4.TRS(invertedTagPos, invertedTagRot, Vector3.one);
-                
-                var cubeOffsetPose = Matrix4x4.TRS(Vector3.zero,Quaternion.Euler(camToWorldRotation), Vector3.one);
-                
-                var cameraPoseInWorld = PassthroughCameraUtils.GetCameraPoseInWorld(m_webCamTextureManager.Eye);
-
-                var cameraWorld = Matrix4x4.TRS(
-                    cameraPoseInWorld.position,
-                    cameraPoseInWorld.rotation,
-                    Vector3.one);
-                
-                var tagPose = cameraWorld * tagPoseCam * cubeOffsetPose;
-                
-                tagPositionInWorld = tagPose.GetPosition();
-                
-                tagRotationInWorld = Quaternion.LookRotation(tagPose.GetColumn(2), tagPose.GetColumn(1));
+                tagPositionInWorld = tagPose.position;
+                tagRotationInWorld = tagPose.rotation;
                 
                 tagsUpdated = false;
             }
@@ -158,6 +139,33 @@ public class AprilTagReader : MonoBehaviour
         {
             Buffer.MemoryCopy(pSrc, pDst, rgbaBytes.Length, rgbaBytes.Length);
         }
+    }
+    
+    /// Converts the AprilTag pose from camera space to world space
+    static public Pose CamToWorld(AprilTagPose tagPose, Pose cameraPoseInWorld)
+    {
+        var invertedTagPos = new Vector3(tagPose.position.x, -tagPose.position.y, tagPose.position.z);
+        var invertedTagRot = new Quaternion(
+            tagPose.rotation.x,
+            -tagPose.rotation.y,
+            tagPose.rotation.z,
+            -tagPose.rotation.w
+        );
+
+        var cubeOffsetPose = Matrix4x4.TRS(Vector3.zero,Quaternion.Euler(camToWorldRotation), Vector3.one);
+        var tagPoseCam = Matrix4x4.TRS(invertedTagPos, invertedTagRot, Vector3.one);
+
+        var cameraWorld = Matrix4x4.TRS(
+            cameraPoseInWorld.position,
+            cameraPoseInWorld.rotation,
+            Vector3.one);
+                
+        var tagPoseWorld = cameraWorld * tagPoseCam * cubeOffsetPose;
+                
+        var tagPositionWorld = tagPoseWorld.GetPosition();
+        var tagRotationWorld = Quaternion.LookRotation(tagPoseWorld.GetColumn(2), tagPoseWorld.GetColumn(1));
+        
+        return new Pose(tagPositionWorld, tagRotationWorld);
     }
     
 }
