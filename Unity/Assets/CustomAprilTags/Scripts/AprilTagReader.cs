@@ -19,10 +19,6 @@ public class AprilTagReader : MonoBehaviour
     [Tooltip("Size of the AprilTag (edge-to-edge) in meters, e.g. 0.1 for 10cm.")]
     [SerializeField] private float tagSize;
 
-    [SerializeField] private Transform debugTarget;
-
-    [SerializeField] private float smoothSpeed;
-
     private bool running;
     private PassthroughCameraIntrinsics intrinsics;
     private byte[] rgbaBytes;
@@ -39,7 +35,7 @@ public class AprilTagReader : MonoBehaviour
     
     private static Vector3 camToWorldRotation = new(90, 180, 0);
     
-    private Dictionary<int, Pose> _tagsById = new();
+    private Dictionary<int, AprilTagWorldInfo> tagWorldData = new();
     
     private IEnumerator Start()
     {
@@ -96,9 +92,6 @@ public class AprilTagReader : MonoBehaviour
             Thread.Sleep(1); // or use ManualResetEvent or a more efficient sync
         }
     }
-    
-    Vector3 tagPositionInWorld = Vector3.zero;
-    Quaternion tagRotationInWorld = Quaternion.identity;
 
     void Update() {
         if (!running || tex == null || !tex.didUpdateThisFrame)
@@ -119,17 +112,21 @@ public class AprilTagReader : MonoBehaviour
         lock (_resultLock) {
             if (tagsUpdated && latestTags.Count > 0) {
                 
-                var tagPose = CamToWorld(latestTags[0], PassthroughCameraUtils.GetCameraPoseInWorld(m_webCamTextureManager.Eye));
-                
-                tagPositionInWorld = tagPose.position;
-                tagRotationInWorld = tagPose.rotation;
+                foreach (var aprilTag in latestTags) {
+                    var tagID = aprilTag.id;
+                    var pose = CamToWorld(aprilTag, PassthroughCameraUtils.GetCameraPoseInWorld(m_webCamTextureManager.Eye));
+
+                    if (!tagWorldData.ContainsKey(tagID))
+                        tagWorldData[tagID] = new AprilTagWorldInfo();
+
+                    tagWorldData[tagID].worldPosition = pose.position;
+                    tagWorldData[tagID].worldRotation = pose.rotation;
+                    tagWorldData[tagID].lastSeenTime = Time.time;
+                }
                 
                 tagsUpdated = false;
             }
         }
-        
-        debugTarget.position = Vector3.Lerp(debugTarget.position, tagPositionInWorld, Time.deltaTime * smoothSpeed);
-        debugTarget.rotation = Quaternion.Lerp(debugTarget.rotation, tagRotationInWorld,Time.deltaTime * smoothSpeed);
     }
 
     unsafe void ConvertToByteArray(Color32[] pixels, byte[] rgbaBytes)
@@ -168,4 +165,23 @@ public class AprilTagReader : MonoBehaviour
         return new Pose(tagPositionWorld, tagRotationWorld);
     }
     
+    public bool TryGetTagWorldPose(int tagID, out Vector3 pos, out Quaternion rot) {
+        if (tagWorldData.TryGetValue(tagID, out var info)) {
+            if (Time.time - info.lastSeenTime < 1.0f) {
+                pos = info.worldPosition;
+                rot = info.worldRotation;
+                return true;
+            }
+        }
+        pos = Vector3.zero;
+        rot = Quaternion.identity;
+        return false;
+    }
+    
+}
+public class AprilTagWorldInfo
+{
+    public Vector3 worldPosition;
+    public Quaternion worldRotation;
+    public float lastSeenTime; // For staleness checks
 }
