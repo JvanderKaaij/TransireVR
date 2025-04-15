@@ -10,7 +10,7 @@ using System.Threading;
 public class AprilTagWrapper : MonoBehaviour
 {
     [DllImport("apriltagnative")]
-    private static extern void init_detector(float tagsize, float focalLengthX, float focalLengthY, float focalCenterX,
+    private static extern void init_detector(float tagsize, int tagFamily, float focalLengthX, float focalLengthY, float focalCenterX,
         float focalCenterY);
     
     [DllImport("apriltagnative")]
@@ -22,10 +22,27 @@ public class AprilTagWrapper : MonoBehaviour
     Stopwatch sw = Stopwatch.StartNew();
     List<AprilTagPose> poses = new();
 
-    public void Init(float tagsize, float focalLengthX, float focalLengthY, float focalCenterX,
+    private int returnStringFromTagFamilyEnum(AprilTagFamily family)
+    {
+        return family switch
+        {
+            AprilTagFamily.Tag16h5 => 0,
+            // AprilTagFamily.Tag25h9 => "tag25h9",
+            // AprilTagFamily.Tag36h11 => "tag36h11",
+            // AprilTagFamily.TagCircle21h7 => "tagCircle21h7",
+            // AprilTagFamily.TagCircle49h12 => "tagCircle49h12",
+            AprilTagFamily.TagStandard41h12 => 5,
+            _ => throw new ArgumentOutOfRangeException(nameof(family), family, null)
+        };
+    }
+    
+    public void Init(float tagsize, AprilTagFamily family, float focalLengthX, float focalLengthY, float focalCenterX,
         float focalCenterY)
     {
-        init_detector(tagsize,  focalLengthX,  focalLengthY,  focalCenterX, focalCenterY);
+        
+        //convert family to string: family
+        
+        init_detector(tagsize, returnStringFromTagFamilyEnum(family), focalLengthX,  focalLengthY,  focalCenterX, focalCenterY);
     }
 
     public int DetectAprilTags(byte[] image, int width, int height)

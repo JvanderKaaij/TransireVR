@@ -18,6 +18,7 @@ public class AprilTagReader : MonoBehaviour
     [SerializeField] private AprilTagWrapper m_aprilTagWrapper;
     [Tooltip("Size of the AprilTag (edge-to-edge) in meters, e.g. 0.1 for 10cm.")]
     [SerializeField] private float tagSize;
+    [SerializeField] private AprilTagFamily tagFamily;
 
     private bool running;
     private PassthroughCameraIntrinsics intrinsics;
@@ -58,7 +59,7 @@ public class AprilTagReader : MonoBehaviour
         var cx = intrinsics.PrincipalPoint.x * scaleX;
         var cy = intrinsics.PrincipalPoint.y * scaleY;
 
-        m_aprilTagWrapper.Init(tagSize, fx, fy, cx, cy);
+        m_aprilTagWrapper.Init(tagSize, tagFamily, fx, fy, cx, cy);
         
         running = true;
         
@@ -178,10 +179,25 @@ public class AprilTagReader : MonoBehaviour
         return false;
     }
     
+    
+    
 }
 public class AprilTagWorldInfo
 {
     public Vector3 worldPosition;
     public Quaternion worldRotation;
     public float lastSeenTime; // For staleness checks
+}
+
+public enum AprilTagFamily
+{
+    Tag16h5,
+    // Tag25h9,
+    // Tag36h10,
+    // Tag36h11,
+    // TagCircle21h7,
+    // TagCircle49h12,
+    // TagCustom48h12,
+    TagStandard41h12,
+    // TagStandard52h13
 }

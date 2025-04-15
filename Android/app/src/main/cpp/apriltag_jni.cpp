@@ -5,6 +5,7 @@
 #include "image_u8.h"
 #include "apriltag.h"
 #include "tagStandard41h12.h"
+#include "tag16h5.h"
 #include "apriltag_pose.h"
 
 extern "C" __attribute__((visibility("default")))
@@ -26,10 +27,16 @@ static std::vector<double> lastDetections;
 
 
 extern "C" __attribute__((visibility("default")))
-void init_detector(float tagsize, float focalLengthX, float focalLengthY, float focalCenterX, float focalCenterY){
+void init_detector(float tagsize, int tagFamily, float focalLengthX, float focalLengthY, float focalCenterX, float focalCenterY){
     if (td != nullptr) return;  // already initialized
     td = apriltag_detector_create();
-    tf = tagStandard41h12_create();
+    if(tagFamily == 0){
+        tf = tag16h5_create();
+    }else if(tagFamily == 5){
+        tf = tagStandard41h12_create();
+    }else{
+
+    }
     apriltag_detector_add_family(td, tf);
 
     info.tagsize = tagsize; //The size of the tag in meters

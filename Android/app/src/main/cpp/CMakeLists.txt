@@ -9,6 +9,7 @@ set(APRILTAG_SRC
         apriltag/apriltag.c
         apriltag/tag36h11.c
         apriltag/tagStandard41h12.c
+        apriltag/tag16h5.c
         apriltag/apriltag_quad_thresh.c
         apriltag/apriltag_pose.c
         ${APRILTAG_COMMON_SRC}
