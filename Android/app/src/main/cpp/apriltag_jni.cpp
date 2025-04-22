@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <vector>
 #include <android/log.h>
+#include <__thread/thread.h>
 #include "image_u8.h"
 #include "apriltag.h"
 #include "tagStandard41h12.h"
@@ -49,10 +50,9 @@ void init_detector(float tagsize, int tagFamily, float focalLengthX, float focal
 //                        info.tagsize, info.fx, info.fy, info.cx, info.cy);
 
     // Optional: tune detection parameters here
-    td->quad_decimate = 1.0;
-    td->nthreads = 8; //Oculus has 8 cores
-    //td->quad_sigma = 0.0;
-    //td->refine_edges = 1;
+    td->quad_decimate = 2.0;
+    td->nthreads = std::thread::hardware_concurrency();
+    td->refine_edges = true;
 }
 
 extern "C" __attribute__((visibility("default")))

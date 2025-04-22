@@ -16,7 +16,9 @@ set(APRILTAG_SRC
 )
 
 add_library(apriltagnative SHARED
-        apriltag_jni.cpp   # JNI wrapper
+        apriltag_jni.cpp
+        camera2impl.cpp
+        ndk/helpers.cpp
         ${APRILTAG_SRC}
 )
 
@@ -26,7 +28,13 @@ include_directories(
 )
 
 find_library(log-lib log)
+find_library(camera2ndk-lib camera2ndk)
+find_library(mediandk-lib mediandk)
+find_library(android-lib android)
 
 target_link_libraries(apriltagnative
         ${log-lib}
+        ${camera2ndk-lib}
+        ${mediandk-lib}
+        ${android-lib}
 )
