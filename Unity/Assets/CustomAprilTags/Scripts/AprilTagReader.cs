@@ -22,16 +22,13 @@ public class AprilTagReader : MonoBehaviour
 
     private bool running;
     private PassthroughCameraIntrinsics intrinsics;
-    private byte[] rgbaBytes;
     private WebCamTexture tex;
-    Thread _detectionThread;
     bool _running = true;
     private bool newFrameAvailable;
     private readonly object _frameLock = new();
     private readonly object _resultLock = new();
     private List<AprilTagPose> latestTags = new();
     private bool tagsUpdated;
-    private Color32[] latestPixels;
     private Vector3 targetPos;
     
     private static Vector3 camToWorldRotation = new(90, 180, 0);
@@ -63,72 +60,29 @@ public class AprilTagReader : MonoBehaviour
         
         running = true;
         
-        _detectionThread = new Thread(DetectionLoop);
-        _detectionThread.Name = "AprilTagDetectionThread";
-        
-        _detectionThread.Start();
     }
     
     void OnDestroy() {
         _running = false;
-        _detectionThread.Join();
     }
-
-    void DetectionLoop() {
-        while (_running) {
-            if (newFrameAvailable) {
-                Stopwatch sw = Stopwatch.StartNew();
-                Color32[] pixelCopy;
-                lock (_frameLock) {
-                    pixelCopy = latestPixels;
-                    newFrameAvailable = false;
-                }
-                ConvertToByteArray(pixelCopy, rgbaBytes);
-                UnityEngine.Debug.Log($"[AprilTag] ConvertToByteArray took {sw.ElapsedMilliseconds}ms");
-
-                
-                var tags = m_aprilTagWrapper.GetLatestPoses(rgbaBytes, m_webCamTextureManager.WebCamTexture.width, m_webCamTextureManager.WebCamTexture.height);
-                UnityEngine.Debug.Log($"[AprilTag] Detection took {sw.ElapsedMilliseconds}ms");
-
-                lock (_resultLock) {
-                    latestTags = tags;
-                    tagsUpdated = true;
-                }
-            }
-            Thread.Sleep(1); // or use ManualResetEvent or a more efficient sync
-        }
-    }
-
+    
     void Update() {
         Stopwatch sw = Stopwatch.StartNew();
         if (running){
-            lock (_frameLock) {
-                latestPixels = tex.GetPixels32();
-                UnityEngine.Debug.Log($"[AprilTag] GetPixels32 took {sw.ElapsedMilliseconds}ms");
-                var width = tex.width;
-                var height = tex.height;
-
-                if (rgbaBytes == null || rgbaBytes.Length != width * height * 4)
-                    rgbaBytes = new byte[width * height * 4];
-
-                newFrameAvailable = true;
-            }
-
+            var latestTags = m_aprilTagWrapper.GetLatestPoses();
             // Apply latest tag transforms on main thread
-            lock (_resultLock) {
-                if (tagsUpdated && latestTags.Count > 0) {
+            if (latestTags.Count > 0) {
+                foreach (var aprilTag in latestTags) {
+                    var tagID = aprilTag.id;
                     
-                    foreach (var aprilTag in latestTags) {
-                        var tagID = aprilTag.id;
+                    var tagPosZ = aprilTag.position.z;
+                    UnityEngine.Debug.Log($"[AprilTag] NEW! Tag Z Raw Position is: ({tagPosZ})");
 
-                        if (!tagWorldData.ContainsKey(tagID))
-                            tagWorldData[tagID] = new AprilTagWorldInfo();
-                        
-                        tagWorldData[tagID].tagPose = TagFromCamera(aprilTag);
-                        UnityEngine.Debug.Log($"[AprilTag] Tage Position in Camera View is: ({tagWorldData[tagID].tagPose.GetPosition().x}, {tagWorldData[tagID].tagPose.GetPosition().y}, {tagWorldData[tagID].tagPose.GetPosition().z})");
-                    }
+                    if (!tagWorldData.ContainsKey(tagID))
+                        tagWorldData[tagID] = new AprilTagWorldInfo();
                     
-                    tagsUpdated = false;
+                    tagWorldData[tagID].tagPose = TagFromCamera(aprilTag);
+                    UnityEngine.Debug.Log($"[AprilTag] Tag Position in Camera View is: ({tagWorldData[tagID].tagPose.GetPosition().x}, {tagWorldData[tagID].tagPose.GetPosition().y}, {tagWorldData[tagID].tagPose.GetPosition().z})");
                 }
             }
         }
@@ -156,15 +110,6 @@ public class AprilTagReader : MonoBehaviour
         }
     }
 
-    unsafe void ConvertToByteArray(Color32[] pixels, byte[] rgbaBytes)
-    {
-        fixed (Color32* pSrc = pixels)
-        fixed (byte* pDst = rgbaBytes)
-        {
-            Buffer.MemoryCopy(pSrc, pDst, rgbaBytes.Length, rgbaBytes.Length);
-        }
-    }
-    
     /// Converts the AprilTag pose from camera space to world space
     static public Matrix4x4 TagFromCamera(AprilTagPose tagPose)
     {

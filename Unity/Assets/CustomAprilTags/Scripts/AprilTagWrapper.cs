@@ -14,10 +14,13 @@ public class AprilTagWrapper : MonoBehaviour
         float focalCenterY);
     
     [DllImport("apriltagnative")]
-    private static extern int detect_apriltags(IntPtr imageData, int width, int height);
+    private static extern int count_apriltags();
     
     [DllImport("apriltagnative")]
     private static extern IntPtr get_latest_poses();
+    
+    [DllImport("apriltagnative")]
+    private static extern void start_camera_native();
     
     Stopwatch sw = Stopwatch.StartNew();
     List<AprilTagPose> poses = new();
@@ -41,35 +44,38 @@ public class AprilTagWrapper : MonoBehaviour
     {
         
         //convert family to string: family
-        
+        start_camera_native();
         init_detector(tagsize, returnStringFromTagFamilyEnum(family), focalLengthX,  focalLengthY,  focalCenterX, focalCenterY);
     }
-
-    public int DetectAprilTags(byte[] image, int width, int height)
-    {
-        GCHandle handle = GCHandle.Alloc(image, GCHandleType.Pinned);
-        IntPtr ptr = handle.AddrOfPinnedObject();
-        int detected = detect_apriltags(ptr, width, height);
-        handle.Free();
-
-        return detected;
-    }
-
-    public List<AprilTagPose> GetLatestPoses(byte[] grayImage, int width, int height)
+    
+    public List<AprilTagPose> GetLatestPoses()
     {
         sw = Stopwatch.StartNew();
         Debug.Log($"Start Get Latest Poses: {sw.Elapsed.TotalMilliseconds}");
         poses = new List<AprilTagPose>();
 
         Debug.Log($"Before Detect: {sw.Elapsed.TotalMilliseconds}");
-        int detected = DetectAprilTags(grayImage, width, height);
+        int detected = count_apriltags();
         if (detected <= 0) return poses;
-        Debug.Log($"After Detect: {sw.Elapsed.TotalMilliseconds}");
+        Debug.Log($"After Detect: {sw.Elapsed.TotalMilliseconds}. Detected {detected} tags.");
 
-        IntPtr dataPtr = get_latest_poses();
-        double[] buffer = new double[detected];
-        Marshal.Copy(dataPtr, buffer, 0, detected);
         int stride = 13;
+        IntPtr dataPtr = get_latest_poses();
+        double[] buffer = new double[detected*stride];
+        Marshal.Copy(dataPtr, buffer, 0, buffer.Length);
+        
+        //Below is for debugging:
+        for (int i = 0; i < detected; i++)
+        {
+            int baseIdx = i * stride;
+            int id = (int)buffer[baseIdx];
+            Vector3 pos = new Vector3(
+                (float)buffer[baseIdx + 1],
+                (float)buffer[baseIdx + 2],
+                (float)buffer[baseIdx + 3]
+            );
+            Debug.Log($"[ParseCheck] Tag {id} parsed position: {pos}");
+        }
         
         Debug.Log($"!!! --> Got Buffer {buffer.Length}");
         for (int i = 0; i < buffer.Length; i += stride)
