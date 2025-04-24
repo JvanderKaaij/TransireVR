@@ -9,11 +9,9 @@
 #include "tag16h5.h"
 #include "apriltag_pose.h"
 #include "camera2.h"
+#include <mutex>
 
-extern "C" __attribute__((visibility("default")))
-const char* stringFromJNI() {
-    return "Unity-native integration FTW!";
-}
+static std::mutex apriltag_mutex;
 
 struct TagPose {
     int id;
@@ -53,7 +51,7 @@ void init_detector(float tagsize, int tagFamily, float focalLengthX, float focal
 
     // Optional: tune detection parameters here
     td->quad_decimate = 2.0;
-    td->nthreads = std::thread::hardware_concurrency();
+    td->nthreads = 4;
     td->refine_edges = true;
 }
 
@@ -80,7 +78,12 @@ int detect_apriltags(const uint8_t* grayscale_data, int width, int height) {
 
 //    __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Running detection on %dx%d image", width, height);
 
+    auto t0 = std::chrono::high_resolution_clock::now();
     zarray_t* detections = apriltag_detector_detect(td, &img);
+    auto t1 = std::chrono::high_resolution_clock::now();
+    __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "TIMING apriltag_detector_detect took: %lldms",
+                        std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count());
+
     int count = zarray_size(detections);
 
     __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Detected %d tags", count);
@@ -100,7 +103,11 @@ int detect_apriltags(const uint8_t* grayscale_data, int width, int height) {
         info.det = det;
         apriltag_pose_t pose;
 
+        auto t0 = std::chrono::high_resolution_clock::now();
         estimate_tag_pose(&info, &pose);
+        auto t1 = std::chrono::high_resolution_clock::now();
+        __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "TIMING estimate_tag_pose took: %lldms",
+                            std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count());
 
         TagPose result;
         result.id = det->id;
@@ -183,11 +190,17 @@ void start_camera_native() {
 
     Camera2Device::Callbacks cb;
     cb.onFrame = [](int64_t ts, std::vector<uint8_t> yuv) {
-        const int width = 1280;  // <- hardcoded TODO pull from config
-        const int height = 960;
-
         __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Run Frame");
-        detect_apriltags(yuv.data(), width, height);
+
+        const int width = 640;
+        const int height = 480;
+
+        std::vector<uint8_t> yuv_copy = std::move(yuv);  // Move into local var
+
+        std::thread([yuv = std::move(yuv_copy), width, height]() mutable {
+            std::lock_guard<std::mutex> lock(apriltag_mutex);
+            detect_apriltags(yuv.data(), width, height);
+        }).detach();
     };
 
     cb.onError = [](const std::string& msg) {

@@ -19,14 +19,14 @@ public class AprilTagReader : MonoBehaviour
     [Tooltip("Size of the AprilTag (edge-to-edge) in meters, e.g. 0.1 for 10cm.")]
     [SerializeField] private float tagSize;
     [SerializeField] private AprilTagFamily tagFamily;
-
+    [SerializeField] private Vector2Int tagResolution = new(640, 480);
+    
+    
     private bool running;
     private PassthroughCameraIntrinsics intrinsics;
     private WebCamTexture tex;
     bool _running = true;
     private bool newFrameAvailable;
-    private readonly object _frameLock = new();
-    private readonly object _resultLock = new();
     private List<AprilTagPose> latestTags = new();
     private bool tagsUpdated;
     private Vector3 targetPos;
@@ -69,7 +69,7 @@ public class AprilTagReader : MonoBehaviour
     void Update() {
         Stopwatch sw = Stopwatch.StartNew();
         if (running){
-            var latestTags = m_aprilTagWrapper.GetLatestPoses();
+            latestTags = m_aprilTagWrapper.GetLatestPoses();
             // Apply latest tag transforms on main thread
             if (latestTags.Count > 0) {
                 foreach (var aprilTag in latestTags) {
@@ -109,7 +109,7 @@ public class AprilTagReader : MonoBehaviour
             
         }
     }
-
+    
     /// Converts the AprilTag pose from camera space to world space
     static public Matrix4x4 TagFromCamera(AprilTagPose tagPose)
     {

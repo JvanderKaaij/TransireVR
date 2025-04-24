@@ -14,8 +14,11 @@
 #include "ndk/helpers.h"
 #include "log.h"
 
+#define ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS_OUTPUT 0
+
 // TODO: only one image format is supported yet
 static constexpr int kImageFormatAndroid = AIMAGE_FORMAT_YUV_420_888;
+
 static constexpr int kMaxBufCount = 2;
 
 static constexpr int kCameraSourceTag = 0x80004d00;
@@ -84,6 +87,31 @@ public:
             }
             auto metadata = std::unique_ptr<ACameraMetadata, ACameraMetadataDeleter>(metadataObj);
 
+
+            Camera2Configuration config;
+            config.id = id;
+            config.width = 640;
+            config.height = 480;
+
+            ACameraMetadata_const_entry entry;
+            ret = ACameraMetadata_getConstEntry(metadata.get(), ACAMERA_SCALER_AVAILABLE_STREAM_CONFIGURATIONS, &entry);
+            if (ret == ACAMERA_OK && entry.count % 4 == 0) {
+                for (uint32_t i = 0; i < entry.count; i += 4) {
+                    int32_t format = entry.data.i32[i];
+                    int32_t width = entry.data.i32[i + 1];
+                    int32_t height = entry.data.i32[i + 2];
+                    int32_t isOutput = entry.data.i32[i + 3];
+
+                    if (format == AIMAGE_FORMAT_YUV_420_888 && isOutput == ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS_OUTPUT && width==480) {//hardcoded TODO fix
+                        config.width = width;
+                        config.height = height;
+                        break;  // just pick the first supported YUV output for now
+                    }
+
+                    __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Supported resolution: %dx%d (format: %d)", width, height, format);
+                }
+            }
+
             CameraMetadata pixelSize =
                     GetCameraMetadata(id, *metadata, (int)ACAMERA_SENSOR_INFO_PIXEL_ARRAY_SIZE);
 
@@ -115,11 +143,8 @@ public:
                 hasLensPose = false;
             }
 
-            Camera2Configuration config;
-
-            config.id = id;
-            config.width = std::get<int32_t>(pixelSize.data[0]);
-            config.height = std::get<int32_t>(pixelSize.data[1]);
+//            config.width = std::get<int32_t>(pixelSize.data[0]);
+//            config.height = std::get<int32_t>(pixelSize.data[1]);
 
             if (!cameraSource.data.empty()) {
                 config.isPassthroughCamera =
