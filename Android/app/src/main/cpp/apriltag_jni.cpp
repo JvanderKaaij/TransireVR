@@ -9,15 +9,10 @@
 #include "tag16h5.h"
 #include "apriltag_pose.h"
 #include "camera2.h"
+#include "apriltag_jni.h"
 #include <mutex>
 
 static std::mutex apriltag_mutex;
-
-struct TagPose {
-    int id;
-    double translation[3];  // x, y, z
-    double rotation[9];     // 3x3 matrix (row-major)
-};
 
 // Static/global detector and family
 static apriltag_detector_t* td = nullptr;
@@ -26,6 +21,54 @@ static apriltag_detection_info_t info;
 static int tagCount;
 static std::vector<double> lastDetections;
 
+extern "C" __attribute__((visibility("default")))
+void start_camera_native() {
+    camManager = Camera2Manager::create();
+    auto configs = camManager->getCameraConfigs();
+
+    __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Let's start");
+
+    if (configs.empty()) {
+        __android_log_print(ANDROID_LOG_ERROR, "AprilTagNative", "No camera found!");
+        return;
+    }
+
+    camera = camManager->openCamera(configs[0].id); // 0=Left, 1=Right
+    if (!camera) {
+        __android_log_print(ANDROID_LOG_ERROR, "AprilTagNative", "Failed to open camera");
+        return;
+    }
+
+    for (const auto& cfg : configs) {
+        __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Camera ID: %s (%dx%d) Position: %s",
+                            cfg.id.c_str(), cfg.width, cfg.height,
+                            cfg.position == Position::Left ? "Left" :
+                            cfg.position == Position::Right ? "Right" : "Unknown");
+    }
+
+    Camera2Device::Callbacks cb;
+    cb.onFrame = [](int64_t ts, std::vector<uint8_t> yuv) {
+        __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Run Frame");
+
+        const int width = 640;
+        const int height = 480;
+
+        std::vector<uint8_t> yuv_copy = std::move(yuv);  // Move into local var
+
+        std::thread([yuv = std::move(yuv_copy), width, height]() mutable {
+            std::lock_guard<std::mutex> lock(apriltag_mutex);
+            detect_apriltags(yuv.data(), width, height);
+        }).detach();
+    };
+
+    cb.onError = [](const std::string& msg) {
+        __android_log_print(ANDROID_LOG_ERROR, "AprilTagNative", "Camera Error: %s", msg.c_str());
+    };
+
+    if (!camera->start(cb)) {
+        __android_log_print(ANDROID_LOG_ERROR, "AprilTagNative", "Failed to start camera");
+    }
+}
 
 extern "C" __attribute__((visibility("default")))
 void init_detector(float tagsize, int tagFamily, float focalLengthX, float focalLengthY, float focalCenterX, float focalCenterY){
@@ -149,8 +192,6 @@ const double* get_latest_poses() {
     return lastDetections.data();
 }
 
-static std::unique_ptr<Camera2Manager> camManager;
-static std::shared_ptr<Camera2Device> camera;
 
 bool save_grayscale_pgm(const std::string& filename, const uint8_t* buffer, int width, int height) {
     FILE* f = fopen(filename.c_str(), "wb");
@@ -163,54 +204,6 @@ bool save_grayscale_pgm(const std::string& filename, const uint8_t* buffer, int 
     return true;
 }
 
-extern "C" __attribute__((visibility("default")))
-void start_camera_native() {
-    camManager = Camera2Manager::create();
-    auto configs = camManager->getCameraConfigs();
-
-    __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Let's start");
-
-    if (configs.empty()) {
-        __android_log_print(ANDROID_LOG_ERROR, "AprilTagNative", "No camera found!");
-        return;
-    }
-
-    camera = camManager->openCamera(configs[0].id); // 0=Left, 1=Right
-    if (!camera) {
-        __android_log_print(ANDROID_LOG_ERROR, "AprilTagNative", "Failed to open camera");
-        return;
-    }
-
-    for (const auto& cfg : configs) {
-        __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Camera ID: %s (%dx%d) Position: %s",
-                            cfg.id.c_str(), cfg.width, cfg.height,
-                            cfg.position == Position::Left ? "Left" :
-                            cfg.position == Position::Right ? "Right" : "Unknown");
-    }
-
-    Camera2Device::Callbacks cb;
-    cb.onFrame = [](int64_t ts, std::vector<uint8_t> yuv) {
-        __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Run Frame");
-
-        const int width = 640;
-        const int height = 480;
-
-        std::vector<uint8_t> yuv_copy = std::move(yuv);  // Move into local var
-
-        std::thread([yuv = std::move(yuv_copy), width, height]() mutable {
-            std::lock_guard<std::mutex> lock(apriltag_mutex);
-            detect_apriltags(yuv.data(), width, height);
-        }).detach();
-    };
-
-    cb.onError = [](const std::string& msg) {
-        __android_log_print(ANDROID_LOG_ERROR, "AprilTagNative", "Camera Error: %s", msg.c_str());
-    };
-
-    if (!camera->start(cb)) {
-        __android_log_print(ANDROID_LOG_ERROR, "AprilTagNative", "Failed to start camera");
-    }
-}
 
 extern "C" __attribute__((visibility("default")))
 int count_apriltags(){

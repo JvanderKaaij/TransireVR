@@ -1,0 +1,8 @@
+{
+  "name": "com.uvavisualisationlab.transirevr",
+  "version": "1.0.0",
+  "displayName": "TransireVR"
+  "description": "Unity wrapper around native Android AprilTag recognition for XR.",
+  "unity": "6000.0.43f1",
+  "dependencies": {}
+}
