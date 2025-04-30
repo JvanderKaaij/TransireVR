@@ -23,7 +23,7 @@ static std::shared_ptr<Camera2Device> camera;
 // tagsize: physical tag size in meters
 // tagFamily: 0 = tag16h5, 5 = tagStandard41h12
 
-void start_camera_native(float tagsize, int tagFamily);
+void start_camera_native(float tagsize, int tagFamily, int width, int height);
 
 // Initializes the AprilTag detector with camera intrinsics
 // focalLengthX/Y: focal lengths in pixels

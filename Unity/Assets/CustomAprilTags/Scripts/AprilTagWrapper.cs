@@ -17,7 +17,7 @@ public class AprilTagWrapper : MonoBehaviour
     private static extern IntPtr get_latest_poses();
     
     [DllImport("apriltagnative")]
-    private static extern void start_camera_native(float tagsize, int tagFamily);
+    private static extern void start_camera_native(float tagsize, int tagFamily, int width, int height);
     
     Stopwatch sw = Stopwatch.StartNew();
     List<AprilTagPose> poses = new();
@@ -36,11 +36,11 @@ public class AprilTagWrapper : MonoBehaviour
         };
     }
     
-    public void Init(float tagsize, AprilTagFamily family)
+    public void Init(float tagsize, AprilTagFamily family, int width, int height)
     {
         
         //convert family to string: family
-        start_camera_native(tagsize, returnStringFromTagFamilyEnum(family));
+        start_camera_native(tagsize, returnStringFromTagFamilyEnum(family), width, height);
     }
     
     public List<AprilTagPose> GetLatestPoses()

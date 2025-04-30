@@ -22,11 +22,8 @@ static int tagCount;
 static std::vector<double> lastDetections;
 
 extern "C" __attribute__((visibility("default")))
-void start_camera_native(float tagsize, int tagFamily) {
+void start_camera_native(float tagsize, int tagFamily, int targetWidth, int targetHeight) {
     camManager = Camera2Manager::create();
-
-    int targetWidth = 640;
-    int targetHeight = 480;
 
     auto configs = camManager->getCameraConfigs(targetWidth, targetHeight);
 

@@ -1,16 +1,11 @@
-using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Numerics;
-using System.Threading;
 using PassthroughCameraSamples;
-using Unity.Profiling;
 using UnityEngine;
 using Matrix4x4 = UnityEngine.Matrix4x4;
 using Quaternion = UnityEngine.Quaternion;
 using Vector3 = UnityEngine.Vector3;
-using Vector2 = UnityEngine.Vector2;
 
 public class AprilTagReader : MonoBehaviour
 {
@@ -23,7 +18,6 @@ public class AprilTagReader : MonoBehaviour
     
     
     private bool running;
-    private PassthroughCameraIntrinsics intrinsics;
     private WebCamTexture tex;
     bool _running = true;
     private bool newFrameAvailable;
@@ -42,24 +36,9 @@ public class AprilTagReader : MonoBehaviour
             yield return null;
         }
         
-        intrinsics = PassthroughCameraUtils.GetCameraIntrinsics(m_webCamTextureManager.Eye);
-        tex = m_webCamTextureManager.WebCamTexture;
-        
-        var referenceResolution = new Vector2Int(1280, 960);
-        var camRes = new Vector2(tex.width, tex.height);
-
-        var scaleX = camRes.x / referenceResolution.x;
-        var scaleY = camRes.y / referenceResolution.y;
-
-        var fx = intrinsics.FocalLength.x * scaleX;
-        var fy = intrinsics.FocalLength.y * scaleY;
-        var cx = intrinsics.PrincipalPoint.x * scaleX;
-        var cy = intrinsics.PrincipalPoint.y * scaleY;
-
-        m_aprilTagWrapper.Init(tagSize, tagFamily);
+        m_aprilTagWrapper.Init(tagSize, tagFamily, tagResolution.x, tagResolution.y);
         
         running = true;
-        
     }
     
     void OnDestroy() {
