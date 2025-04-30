@@ -55,7 +55,7 @@ public:
         }
     }
 
-    std::vector<Camera2Configuration> getCameraConfigs() override {
+    std::vector<Camera2Configuration> getCameraConfigs(int targetWidth, int targetHeigth) override {
         if (!cameraManager_) {
             ALOGE(" ***** Camera manager is not initialized");
             return {};
@@ -87,13 +87,31 @@ public:
             }
             auto metadata = std::unique_ptr<ACameraMetadata, ACameraMetadataDeleter>(metadataObj);
 
-
             Camera2Configuration config;
-            config.id = id;
-            config.width = 640;
-            config.height = 480;
 
             ACameraMetadata_const_entry entry;
+            camera_status_t status;
+
+            config.id = id;
+
+            ACameraMetadata_const_entry activeArrayEntry;
+            status = ACameraMetadata_getConstEntry(metadata.get(), ACAMERA_SENSOR_INFO_ACTIVE_ARRAY_SIZE, &activeArrayEntry);
+
+            int sensorWidth;
+            int sensorHeight;
+
+            if (status == ACAMERA_OK && activeArrayEntry.count == 4) {
+                int32_t left   = activeArrayEntry.data.i32[0];
+                int32_t top    = activeArrayEntry.data.i32[1];
+                int32_t right  = activeArrayEntry.data.i32[2];
+                int32_t bottom = activeArrayEntry.data.i32[3];
+
+                sensorWidth  = right - left;
+                sensorHeight = bottom - top;
+            } else {
+                ALOGE(" ***** Failed to get camera size for camera: `%s`", id);
+            }
+
             ret = ACameraMetadata_getConstEntry(metadata.get(), ACAMERA_SCALER_AVAILABLE_STREAM_CONFIGURATIONS, &entry);
             if (ret == ACAMERA_OK && entry.count % 4 == 0) {
                 for (uint32_t i = 0; i < entry.count; i += 4) {
@@ -102,9 +120,32 @@ public:
                     int32_t height = entry.data.i32[i + 2];
                     int32_t isOutput = entry.data.i32[i + 3];
 
-                    if (format == AIMAGE_FORMAT_YUV_420_888 && isOutput == ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS_OUTPUT && width==480) {//hardcoded TODO fix
+                    if (format == AIMAGE_FORMAT_YUV_420_888 && isOutput == ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS_OUTPUT && width == targetWidth && height == targetHeigth) {
                         config.width = width;
                         config.height = height;
+
+                        float scaleX = static_cast<float>(width) / static_cast<float>(sensorWidth);
+                        float scaleY = static_cast<float>(height) / static_cast<float>(sensorHeight);
+
+                        __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Scaling: %fx%f", scaleX, scaleY);
+                        __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Status: %d Entry Count: %d", status, entry.count);
+
+                        status = ACameraMetadata_getConstEntry(metadata.get(), ACAMERA_LENS_INTRINSIC_CALIBRATION, &entry);
+
+                        if (status == ACAMERA_OK) {
+                            //Are we getting here?!?!?! I dont think so - why do we need this conditional??
+                            config.fx = entry.data.f[0] * scaleX;  // focal length x
+                            config.fy = entry.data.f[1] * scaleY;  // focal length y
+                            config.cx = entry.data.f[2] * scaleX;  // principal point x
+                            config.cy = entry.data.f[3] * scaleY;  // principal point y
+                            config.s  = entry.data.f[4];  // skew (usually zero)
+
+                            __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Status OKAY!:");
+                            __android_log_print(ANDROID_LOG_INFO, "AprilTagNative",
+                                                "000 ! Camera Intrinsics: fx=%.2f fy=%.2f cx=%.2f cy=%.2f s=%.2f",
+                                                config.fx, config.fy, config.cx, config.cy, config.s);
+                        }
+
                         break;  // just pick the first supported YUV output for now
                     }
 
@@ -240,7 +281,7 @@ public:
         return res;
     }
 
-    std::shared_ptr<Camera2Device> openCamera(const std::string& id) override;
+    std::shared_ptr<Camera2Device> openCamera(const std::string& id, int targetWidth, int targetHeigth) override;
 
 private:
     std::unique_ptr<ACameraManager, ACameraManagerDeleter> cameraManager_{};
@@ -629,7 +670,7 @@ private:
     ACameraCaptureSession_stateCallbacks captureSessionStateCallbacks_;
 };
 
-std::shared_ptr<Camera2Device> Camera2ManagerImpl::openCamera(const std::string& id) {
+std::shared_ptr<Camera2Device> Camera2ManagerImpl::openCamera(const std::string& id, int targetWidth, int targetHeigth) {
     std::string idStr(id);
 
     if (devices_.find(idStr) != devices_.end()) {
@@ -637,7 +678,7 @@ std::shared_ptr<Camera2Device> Camera2ManagerImpl::openCamera(const std::string&
         return nullptr;
     }
 
-    auto configs = getCameraConfigs();
+    auto configs = getCameraConfigs(targetWidth, targetHeigth);
     auto cameraConfig =
             std::find_if(configs.begin(), configs.end(), [id](const Camera2Configuration& config) {
                 return config.id == id;

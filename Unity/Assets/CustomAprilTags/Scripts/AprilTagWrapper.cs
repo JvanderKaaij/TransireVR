@@ -9,9 +9,6 @@ using System.Threading;
 
 public class AprilTagWrapper : MonoBehaviour
 {
-    [DllImport("apriltagnative")]
-    private static extern void init_detector(float tagsize, int tagFamily, float focalLengthX, float focalLengthY, float focalCenterX,
-        float focalCenterY);
     
     [DllImport("apriltagnative")]
     private static extern int count_apriltags();
@@ -20,7 +17,7 @@ public class AprilTagWrapper : MonoBehaviour
     private static extern IntPtr get_latest_poses();
     
     [DllImport("apriltagnative")]
-    private static extern void start_camera_native();
+    private static extern void start_camera_native(float tagsize, int tagFamily);
     
     Stopwatch sw = Stopwatch.StartNew();
     List<AprilTagPose> poses = new();
@@ -39,13 +36,11 @@ public class AprilTagWrapper : MonoBehaviour
         };
     }
     
-    public void Init(float tagsize, AprilTagFamily family, float focalLengthX, float focalLengthY, float focalCenterX,
-        float focalCenterY)
+    public void Init(float tagsize, AprilTagFamily family)
     {
         
         //convert family to string: family
-        start_camera_native();
-        init_detector(tagsize, returnStringFromTagFamilyEnum(family), focalLengthX,  focalLengthY,  focalCenterX, focalCenterY);
+        start_camera_native(tagsize, returnStringFromTagFamilyEnum(family));
     }
     
     public List<AprilTagPose> GetLatestPoses()

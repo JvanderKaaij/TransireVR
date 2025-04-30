@@ -23,12 +23,12 @@ static std::shared_ptr<Camera2Device> camera;
 // tagsize: physical tag size in meters
 // tagFamily: 0 = tag16h5, 5 = tagStandard41h12
 
-void start_camera_native();
+void start_camera_native(float tagsize, int tagFamily);
 
 // Initializes the AprilTag detector with camera intrinsics
 // focalLengthX/Y: focal lengths in pixels
 // focalCenterX/Y: principal point coordinates in pixels
-void init_detector(float tagsize, int tagFamily, float focalLengthX, float focalLengthY, float focalCenterX, float focalCenterY);
+void init_detector(float tagsize, int tagFamily, Camera2Configuration config);
 
 // Processes a grayscale image and runs AprilTag detection
 // grayscale_data: pointer to Y channel (grayscale image buffer)

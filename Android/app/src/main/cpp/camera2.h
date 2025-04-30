@@ -32,6 +32,12 @@ struct Camera2Configuration {
     int32_t height;
     float lensTranslation[3];
     float lensRotation[4];
+    float fx;
+    float fy;
+    float cx;
+    float cy;
+    float s;
+
     std::optional<bool> isPassthroughCamera;
     Position position = Position::Unknown;
 };
@@ -42,9 +48,9 @@ public:
 
     static std::unique_ptr<Camera2Manager> create();
 
-    virtual std::vector<Camera2Configuration> getCameraConfigs() = 0;
+    virtual std::vector<Camera2Configuration> getCameraConfigs(int targetWidth, int targetHeight) = 0;
 
-    virtual std::shared_ptr<Camera2Device> openCamera(const std::string& id) = 0; 
+    virtual std::shared_ptr<Camera2Device> openCamera(const std::string& id, int targetWidth, int targetHeigth) = 0;
 
     virtual void shutdown() = 0;
 

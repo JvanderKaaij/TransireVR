@@ -22,20 +22,18 @@ static int tagCount;
 static std::vector<double> lastDetections;
 
 extern "C" __attribute__((visibility("default")))
-void start_camera_native() {
+void start_camera_native(float tagsize, int tagFamily) {
     camManager = Camera2Manager::create();
-    auto configs = camManager->getCameraConfigs();
+
+    int targetWidth = 640;
+    int targetHeight = 480;
+
+    auto configs = camManager->getCameraConfigs(targetWidth, targetHeight);
 
     __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Let's start");
 
     if (configs.empty()) {
         __android_log_print(ANDROID_LOG_ERROR, "AprilTagNative", "No camera found!");
-        return;
-    }
-
-    camera = camManager->openCamera(configs[0].id); // 0=Left, 1=Right
-    if (!camera) {
-        __android_log_print(ANDROID_LOG_ERROR, "AprilTagNative", "Failed to open camera");
         return;
     }
 
@@ -46,13 +44,22 @@ void start_camera_native() {
                             cfg.position == Position::Right ? "Right" : "Unknown");
     }
 
+    Camera2Configuration leftCamConfig = configs[0];
+
+    const int width = leftCamConfig.width;
+    const int height = leftCamConfig.height;
+
+    camera = camManager->openCamera(leftCamConfig.id, targetWidth, targetHeight); // 0=Left, 1=Right
+
+    if (!camera) {
+        __android_log_print(ANDROID_LOG_ERROR, "AprilTagNative", "Failed to open camera");
+        return;
+    }
+
+    init_detector(tagsize, tagFamily, leftCamConfig);
+
     Camera2Device::Callbacks cb;
-    cb.onFrame = [](int64_t ts, std::vector<uint8_t> yuv) {
-        __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Run Frame");
-
-        const int width = 640;
-        const int height = 480;
-
+    cb.onFrame = [width, height](int64_t ts, std::vector<uint8_t> yuv) {
         std::vector<uint8_t> yuv_copy = std::move(yuv);  // Move into local var
 
         std::thread([yuv = std::move(yuv_copy), width, height]() mutable {
@@ -68,10 +75,12 @@ void start_camera_native() {
     if (!camera->start(cb)) {
         __android_log_print(ANDROID_LOG_ERROR, "AprilTagNative", "Failed to start camera");
     }
+
+    __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "About to start Init Detector!");
+
 }
 
-extern "C" __attribute__((visibility("default")))
-void init_detector(float tagsize, int tagFamily, float focalLengthX, float focalLengthY, float focalCenterX, float focalCenterY){
+void init_detector(float tagsize, int tagFamily, Camera2Configuration config){
     if (td != nullptr) return;  // already initialized
     td = apriltag_detector_create();
     if(tagFamily == 0){
@@ -84,10 +93,10 @@ void init_detector(float tagsize, int tagFamily, float focalLengthX, float focal
     apriltag_detector_add_family(td, tf);
 
     info.tagsize = tagsize; //The size of the tag in meters
-    info.fx = focalLengthX;
-    info.fy = focalLengthY;
-    info.cx = focalCenterX;
-    info.cy = focalCenterY;
+    info.fx = config.fx;
+    info.fy = config.fy;
+    info.cx = config.cx;
+    info.cy = config.cy;
 
 //    __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Initializing: tagsize=%.3f fx=%.1f fy=%.1f cx=%.1f cy=%.1f",
 //                        info.tagsize, info.fx, info.fy, info.cx, info.cy);
@@ -121,15 +130,9 @@ int detect_apriltags(const uint8_t* grayscale_data, int width, int height) {
 
 //    __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Running detection on %dx%d image", width, height);
 
-    auto t0 = std::chrono::high_resolution_clock::now();
     zarray_t* detections = apriltag_detector_detect(td, &img);
-    auto t1 = std::chrono::high_resolution_clock::now();
-    __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "TIMING apriltag_detector_detect took: %lldms",
-                        std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count());
 
     int count = zarray_size(detections);
-
-    __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Detected %d tags", count);
 
 //    __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Pixel[0]=%d, center=%d, last=%d",
 //                        image_data[0],
@@ -146,19 +149,13 @@ int detect_apriltags(const uint8_t* grayscale_data, int width, int height) {
         info.det = det;
         apriltag_pose_t pose;
 
-        auto t0 = std::chrono::high_resolution_clock::now();
         estimate_tag_pose(&info, &pose);
-        auto t1 = std::chrono::high_resolution_clock::now();
-        __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "TIMING estimate_tag_pose took: %lldms",
-                            std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count());
 
         TagPose result;
         result.id = det->id;
         for (int j = 0; j < 3; j++) {
             result.translation[j] = pose.t->data[j];
         }
-        __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Tag Z Position: %f", result.translation[2]);
-
         for (int j = 0; j < 9; j++) {
             result.rotation[j] = pose.R->data[j];
         }
@@ -173,8 +170,6 @@ int detect_apriltags(const uint8_t* grayscale_data, int width, int height) {
     zarray_destroy(detections);
 
     lastDetections.clear();
-    __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Tag Results: %d tags", tagResults.size());
-
     tagCount = count;
 
     for (const auto& pose : tagResults) {
@@ -188,22 +183,8 @@ int detect_apriltags(const uint8_t* grayscale_data, int width, int height) {
 
 extern "C" __attribute__((visibility("default")))
 const double* get_latest_poses() {
-    __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Retrieving Last Detections amount: %d", lastDetections.size());
     return lastDetections.data();
 }
-
-
-bool save_grayscale_pgm(const std::string& filename, const uint8_t* buffer, int width, int height) {
-    FILE* f = fopen(filename.c_str(), "wb");
-    if (!f) return false;
-
-    fprintf(f, "P5\n%d %d\n255\n", width, height);  // PGM header
-    fwrite(buffer, 1, width * height, f);
-    fclose(f);
-
-    return true;
-}
-
 
 extern "C" __attribute__((visibility("default")))
 int count_apriltags(){

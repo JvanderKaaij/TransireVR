@@ -11374,6 +11374,10 @@ PrefabInstance:
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5968758783759978816, guid: 288f3fe3a86fe2a40829a199cd8cb64b, type: 3}
+      propertyPath: tagResolution.x
+      value: 640
+      objectReference: {fileID: 0}
+    - target: {fileID: 5968758783759978816, guid: 288f3fe3a86fe2a40829a199cd8cb64b, type: 3}
       propertyPath: offsetRotation.x
       value: 90
       objectReference: {fileID: 0}

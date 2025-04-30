@@ -56,7 +56,7 @@ public class AprilTagReader : MonoBehaviour
         var cx = intrinsics.PrincipalPoint.x * scaleX;
         var cy = intrinsics.PrincipalPoint.y * scaleY;
 
-        m_aprilTagWrapper.Init(tagSize, tagFamily, fx, fy, cx, cy);
+        m_aprilTagWrapper.Init(tagSize, tagFamily);
         
         running = true;
         
