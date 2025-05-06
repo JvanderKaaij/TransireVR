@@ -19,6 +19,10 @@ public class AprilTagWrapper : MonoBehaviour
     [DllImport("apriltagnative")]
     private static extern void start_camera_native(float tagsize, int tagFamily, int width, int height);
     
+    
+    [DllImport("apriltagnative")]
+    private static extern bool is_camera_ready();
+    
     Stopwatch sw = Stopwatch.StartNew();
     List<AprilTagPose> poses = new();
 
@@ -38,8 +42,6 @@ public class AprilTagWrapper : MonoBehaviour
     
     public void Init(float tagsize, AprilTagFamily family, int width, int height)
     {
-        
-        //convert family to string: family
         start_camera_native(tagsize, returnStringFromTagFamilyEnum(family), width, height);
     }
     

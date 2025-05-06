@@ -1,6 +1,5 @@
 using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics;
 using PassthroughCameraSamples;
 using UnityEngine;
 using Matrix4x4 = UnityEngine.Matrix4x4;
@@ -9,13 +8,12 @@ using Vector3 = UnityEngine.Vector3;
 
 public class AprilTagReader : MonoBehaviour
 {
-    [SerializeField] private WebCamTextureManager m_webCamTextureManager;
     [SerializeField] private AprilTagWrapper m_aprilTagWrapper;
     [Tooltip("Size of the AprilTag (edge-to-edge) in meters, e.g. 0.1 for 10cm.")]
     [SerializeField] private float tagSize;
     [SerializeField] private AprilTagFamily tagFamily;
     [SerializeField] private Vector2Int tagResolution = new(640, 480);
-    
+    [SerializeField] public PassthroughCameraPermissions CameraPermissions;
     
     private bool running;
     private WebCamTexture tex;
@@ -28,16 +26,30 @@ public class AprilTagReader : MonoBehaviour
     private static Vector3 camToWorldRotation = new(90, 180, 0);
     
     private Dictionary<int, AprilTagWorldInfo> tagWorldData = new();
+
+    private bool m_hasPermission;
+    
+    private void Awake()
+    {
+#if UNITY_ANDROID
+        CameraPermissions.AskCameraPermissions();
+#endif
+    }
     
     private IEnumerator Start()
     {
-        while (m_webCamTextureManager.WebCamTexture == null)
-        {
+        while(PassthroughCameraPermissions.HasCameraPermission != true){
             yield return null;
         }
-        
+        Debug.Log($"[AprilTag] Permissions granted!");
+        m_hasPermission = true;
+        StartAprilTagDetector();
+    }
+    
+    private void StartAprilTagDetector()
+    {
+        Debug.Log($"[AprilTag] Start April Tag Detector");
         m_aprilTagWrapper.Init(tagSize, tagFamily, tagResolution.x, tagResolution.y);
-        
         running = true;
     }
     
@@ -46,30 +58,31 @@ public class AprilTagReader : MonoBehaviour
     }
     
     void Update() {
-        Stopwatch sw = Stopwatch.StartNew();
+        
         if (running){
             latestTags = m_aprilTagWrapper.GetLatestPoses();
+            Debug.Log($"[AprilTag] Detector Running: {latestTags.Count} tags detected");
             // Apply latest tag transforms on main thread
             if (latestTags.Count > 0) {
                 foreach (var aprilTag in latestTags) {
                     var tagID = aprilTag.id;
                     
                     var tagPosZ = aprilTag.position.z;
-                    UnityEngine.Debug.Log($"[AprilTag] NEW! Tag Z Raw Position is: ({tagPosZ})");
+                    Debug.Log($"[AprilTag] NEW! Tag Z Raw Position is: ({tagPosZ})");
 
                     if (!tagWorldData.ContainsKey(tagID))
                         tagWorldData[tagID] = new AprilTagWorldInfo();
                     
                     tagWorldData[tagID].tagPose = TagFromCamera(aprilTag);
-                    UnityEngine.Debug.Log($"[AprilTag] Tag Position in Camera View is: ({tagWorldData[tagID].tagPose.GetPosition().x}, {tagWorldData[tagID].tagPose.GetPosition().y}, {tagWorldData[tagID].tagPose.GetPosition().z})");
+                    Debug.Log($"[AprilTag] Tag Position in Camera View is: ({tagWorldData[tagID].tagPose.GetPosition().x}, {tagWorldData[tagID].tagPose.GetPosition().y}, {tagWorldData[tagID].tagPose.GetPosition().z})");
                 }
             }
         }
         
         foreach (var aprilTag in tagWorldData)
         {
-            var cameraPoseInWorld = PassthroughCameraUtils.GetCameraPoseInWorld(m_webCamTextureManager.Eye);
-            UnityEngine.Debug.Log($"[AprilTag] Camera Position in World is: ({cameraPoseInWorld.position.x}, {cameraPoseInWorld.position.y}, {cameraPoseInWorld.position.z})");
+            var cameraPoseInWorld = PassthroughCameraUtils.GetCameraPoseInWorld(PassthroughCameraEye.Left);
+            Debug.Log($"[AprilTag] Camera Position in World is: ({cameraPoseInWorld.position.x}, {cameraPoseInWorld.position.y}, {cameraPoseInWorld.position.z})");
             
             var cameraWorld = Matrix4x4.TRS(
                 cameraPoseInWorld.position,

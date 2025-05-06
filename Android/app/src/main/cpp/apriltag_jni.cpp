@@ -57,6 +57,7 @@ void start_camera_native(float tagsize, int tagFamily, int targetWidth, int targ
 
     Camera2Device::Callbacks cb;
     cb.onFrame = [width, height](int64_t ts, std::vector<uint8_t> yuv) {
+
         std::vector<uint8_t> yuv_copy = std::move(yuv);  // Move into local var
 
         std::thread([yuv = std::move(yuv_copy), width, height]() mutable {
@@ -125,7 +126,7 @@ int detect_apriltags(const uint8_t* grayscale_data, int width, int height) {
 //    int write_result = image_u8_write_pnm(&img, "/sdcard/Android/data/com.samples.passthroughcamera/files/frame.pnm");
 //    __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Saved frame.pnm: %s", write_result == 0 ? "success" : "FAILED");
 
-//    __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Running detection on %dx%d image", width, height);
+    __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Running detection on %dx%d image", width, height);
 
     zarray_t* detections = apriltag_detector_detect(td, &img);
 
@@ -199,4 +200,3 @@ void stop_camera_native() {
         camManager = nullptr;
     }
 }
-
