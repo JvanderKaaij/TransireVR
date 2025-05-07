@@ -49,7 +49,7 @@ public class AprilTagWrapper : MonoBehaviour
     {
         sw = Stopwatch.StartNew();
         Debug.Log($"Start Get Latest Poses: {sw.Elapsed.TotalMilliseconds}");
-        poses = new List<AprilTagPose>();
+        poses.Clear();
 
         Debug.Log($"Before Detect: {sw.Elapsed.TotalMilliseconds}");
         int detected = count_apriltags();
@@ -60,19 +60,20 @@ public class AprilTagWrapper : MonoBehaviour
         IntPtr dataPtr = get_latest_poses();
         double[] buffer = new double[detected*stride];
         Marshal.Copy(dataPtr, buffer, 0, buffer.Length);
+        Debug.Log($"After Get Latest Poses: {sw.Elapsed.TotalMilliseconds}.");
         
-        //Below is for debugging:
-        for (int i = 0; i < detected; i++)
-        {
-            int baseIdx = i * stride;
-            int id = (int)buffer[baseIdx];
-            Vector3 pos = new Vector3(
-                (float)buffer[baseIdx + 1],
-                (float)buffer[baseIdx + 2],
-                (float)buffer[baseIdx + 3]
-            );
-            Debug.Log($"[ParseCheck] Tag {id} parsed position: {pos}");
-        }
+        // //Below is for debugging:
+        // for (int i = 0; i < detected; i++)
+        // {
+        //     int baseIdx = i * stride;
+        //     int id = (int)buffer[baseIdx];
+        //     Vector3 pos = new Vector3(
+        //         (float)buffer[baseIdx + 1],
+        //         (float)buffer[baseIdx + 2],
+        //         (float)buffer[baseIdx + 3]
+        //     );
+        //     Debug.Log($"[ParseCheck] Tag {id} parsed position: {pos}");
+        // }
         
         Debug.Log($"!!! --> Got Buffer {buffer.Length}");
         for (int i = 0; i < buffer.Length; i += stride)
@@ -98,7 +99,7 @@ public class AprilTagWrapper : MonoBehaviour
                 rotation = rot.rotation
             });
         }
-
+        Debug.Log($"End of Poses Parsing: {sw.Elapsed.TotalMilliseconds}.");
         return poses;
     }
 }

@@ -1,7 +1,9 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using PassthroughCameraSamples;
 using UnityEngine;
+using Debug = UnityEngine.Debug;
 using Matrix4x4 = UnityEngine.Matrix4x4;
 using Quaternion = UnityEngine.Quaternion;
 using Vector3 = UnityEngine.Vector3;
@@ -29,9 +31,12 @@ public class AprilTagReader : MonoBehaviour
 
     private bool m_hasPermission;
     
+    Stopwatch sw = Stopwatch.StartNew();
+    
     private void Awake()
     {
 #if UNITY_ANDROID
+        Debug.Log($"[AprilTag] Debug Hangup! Awake");
         CameraPermissions.AskCameraPermissions();
 #endif
     }
@@ -41,14 +46,13 @@ public class AprilTagReader : MonoBehaviour
         while(PassthroughCameraPermissions.HasCameraPermission != true){
             yield return null;
         }
-        Debug.Log($"[AprilTag] Permissions granted!");
+        Debug.Log($"[AprilTag] Debug Hangup! Permissions Granted");
         m_hasPermission = true;
         StartAprilTagDetector();
     }
     
     private void StartAprilTagDetector()
     {
-        Debug.Log($"[AprilTag] Start April Tag Detector");
         m_aprilTagWrapper.Init(tagSize, tagFamily, tagResolution.x, tagResolution.y);
         running = true;
     }
@@ -60,7 +64,10 @@ public class AprilTagReader : MonoBehaviour
     void Update() {
         
         if (running){
+            sw = Stopwatch.StartNew();
+            Debug.Log($"--> START update loop: {sw.Elapsed.TotalMilliseconds}");
             latestTags = m_aprilTagWrapper.GetLatestPoses();
+            Debug.Log($"--> Gotten latest poses: {sw.Elapsed.TotalMilliseconds}");
             Debug.Log($"[AprilTag] Detector Running: {latestTags.Count} tags detected");
             // Apply latest tag transforms on main thread
             if (latestTags.Count > 0) {
@@ -76,30 +83,32 @@ public class AprilTagReader : MonoBehaviour
                     tagWorldData[tagID].tagPose = TagFromCamera(aprilTag);
                     Debug.Log($"[AprilTag] Tag Position in Camera View is: ({tagWorldData[tagID].tagPose.GetPosition().x}, {tagWorldData[tagID].tagPose.GetPosition().y}, {tagWorldData[tagID].tagPose.GetPosition().z})");
                 }
+                Debug.Log($"--> End Tag From Camera Loop: {sw.Elapsed.TotalMilliseconds}");
             }
+            foreach (var aprilTag in tagWorldData)
+            {
+                var cameraPoseInWorld = PassthroughCameraUtils.GetCameraPoseInWorld(PassthroughCameraEye.Left);
+                Debug.Log($"[AprilTag] Camera Position in World is: ({cameraPoseInWorld.position.x}, {cameraPoseInWorld.position.y}, {cameraPoseInWorld.position.z})");
+                
+                var cameraWorld = Matrix4x4.TRS(
+                    cameraPoseInWorld.position,
+                    cameraPoseInWorld.rotation,
+                    Vector3.one);
+                
+                
+                var worldPose = cameraWorld * aprilTag.Value.tagPose;
+                                
+                var tagPositionWorld = worldPose.GetPosition();
+                var tagRotationWorld = Quaternion.LookRotation(worldPose.GetColumn(2), worldPose.GetColumn(1));
+                
+                //Threshold built in - to avoid updating on only camera movement
+                aprilTag.Value.worldPosition = tagPositionWorld;
+                aprilTag.Value.worldRotation = tagRotationWorld;
+                
+            }
+            Debug.Log($"--> End Camera Pose in World Loop: {sw.Elapsed.TotalMilliseconds}");
         }
-        
-        foreach (var aprilTag in tagWorldData)
-        {
-            var cameraPoseInWorld = PassthroughCameraUtils.GetCameraPoseInWorld(PassthroughCameraEye.Left);
-            Debug.Log($"[AprilTag] Camera Position in World is: ({cameraPoseInWorld.position.x}, {cameraPoseInWorld.position.y}, {cameraPoseInWorld.position.z})");
-            
-            var cameraWorld = Matrix4x4.TRS(
-                cameraPoseInWorld.position,
-                cameraPoseInWorld.rotation,
-                Vector3.one);
-            
-            
-            var worldPose = cameraWorld * aprilTag.Value.tagPose;
-                            
-            var tagPositionWorld = worldPose.GetPosition();
-            var tagRotationWorld = Quaternion.LookRotation(worldPose.GetColumn(2), worldPose.GetColumn(1));
-            
-            //Threshold built in - to avoid updating on only camera movement
-            aprilTag.Value.worldPosition = tagPositionWorld;
-            aprilTag.Value.worldRotation = tagRotationWorld;
-            
-        }
+        Debug.Log($"--> END update loop: {sw.Elapsed.TotalMilliseconds}");
     }
     
     /// Converts the AprilTag pose from camera space to world space

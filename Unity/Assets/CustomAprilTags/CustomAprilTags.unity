@@ -11470,7 +11470,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4444089071136658990, guid: cfcd3625c2997dd45aaa51cd18b72a55, type: 3}
       propertyPath: m_text
-      value: V0.05
+      value: V0.06
       objectReference: {fileID: 0}
     - target: {fileID: 5708687184544397982, guid: cfcd3625c2997dd45aaa51cd18b72a55, type: 3}
       propertyPath: m_AnchorMax.x
@@ -11619,7 +11619,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 1485372499292028700, guid: fd9652ba126642448b429f00e0784ce2, type: 3}
       propertyPath: smoothSpeed
-      value: 1
+      value: 8
       objectReference: {fileID: 0}
     - target: {fileID: 1485372499292028700, guid: fd9652ba126642448b429f00e0784ce2, type: 3}
       propertyPath: _aprilTagReader

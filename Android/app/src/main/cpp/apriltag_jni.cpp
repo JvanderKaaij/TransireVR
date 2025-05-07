@@ -11,6 +11,8 @@
 #include "camera2.h"
 #include "apriltag_jni.h"
 #include <mutex>
+#include <time.h> // For clock_gettime
+#include <__thread/this_thread.h>
 
 static std::mutex apriltag_mutex;
 
@@ -46,10 +48,15 @@ void start_camera_native(float tagsize, int tagFamily, int targetWidth, int targ
     const int width = leftCamConfig.width;
     const int height = leftCamConfig.height;
 
-    camera = camManager->openCamera(leftCamConfig.id, targetWidth, targetHeight); // 0=Left, 1=Right
+    for (int i = 0; i < 5; ++i) {
+        camera = camManager->openCamera(leftCamConfig.id, targetWidth, targetHeight);
+        if (camera) break;
+        __android_log_print(ANDROID_LOG_ERROR, "AprilTagNative", "Retrying camera open (attempt %d)", i + 1);
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
 
     if (!camera) {
-        __android_log_print(ANDROID_LOG_ERROR, "AprilTagNative", "Failed to open camera");
+        __android_log_print(ANDROID_LOG_ERROR, "AprilTagNative", "Failed to open camera after 5 attempts");
         return;
     }
 
@@ -70,8 +77,14 @@ void start_camera_native(float tagsize, int tagFamily, int targetWidth, int targ
         __android_log_print(ANDROID_LOG_ERROR, "AprilTagNative", "Camera Error: %s", msg.c_str());
     };
 
-    if (!camera->start(cb)) {
-        __android_log_print(ANDROID_LOG_ERROR, "AprilTagNative", "Failed to start camera");
+    try {
+        if (!camera->start(cb)) {
+            __android_log_print(ANDROID_LOG_ERROR, "AprilTagNative", "Failed to start camera (unknown reason)");
+        }
+    } catch (const std::exception& e) {
+        __android_log_print(ANDROID_LOG_ERROR, "AprilTagNative", "Exception while starting camera: %s", e.what());
+    } catch (...) {
+        __android_log_print(ANDROID_LOG_ERROR, "AprilTagNative", "Unknown exception while starting camera");
     }
 
     __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "About to start Init Detector!");
@@ -123,24 +136,25 @@ int detect_apriltags(const uint8_t* grayscale_data, int width, int height) {
             .buf = const_cast<uint8_t*>(grayscale_data)
     };
 
-//    int write_result = image_u8_write_pnm(&img, "/sdcard/Android/data/com.samples.passthroughcamera/files/frame.pnm");
-//    __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Saved frame.pnm: %s", write_result == 0 ? "success" : "FAILED");
-
     __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Running detection on %dx%d image", width, height);
+
+    // Start timing
+    struct timespec start_time, end_time;
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
 
     zarray_t* detections = apriltag_detector_detect(td, &img);
 
-    int count = zarray_size(detections);
+    // End timing
+    clock_gettime(CLOCK_MONOTONIC, &end_time);
+    long elapsed_ms = (end_time.tv_sec - start_time.tv_sec) * 1000 +
+                      (end_time.tv_nsec - start_time.tv_nsec) / 1000000;
 
-//    __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Pixel[0]=%d, center=%d, last=%d",
-//                        image_data[0],
-//                        image_data[(height/2) * width + (width/2)],
-//                        image_data[height * width - 1]
-//    );
+    __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Detection took %ld ms", elapsed_ms);
+
+    int count = zarray_size(detections);
 
     std::vector<TagPose> tagResults;
 
-    // Optional: free detections here (don't leak memory!)
     for (int i = 0; i < count; i++) {
         apriltag_detection_t* det;
         zarray_get(detections, i, &det);
@@ -160,7 +174,6 @@ int detect_apriltags(const uint8_t* grayscale_data, int width, int height) {
 
         tagResults.push_back(result);
 
-        //Destroy after use
         matd_destroy(pose.R);
         matd_destroy(pose.t);
         apriltag_detection_destroy(det);
@@ -171,7 +184,7 @@ int detect_apriltags(const uint8_t* grayscale_data, int width, int height) {
     tagCount = count;
 
     for (const auto& pose : tagResults) {
-        lastDetections.push_back(static_cast<double>(pose.id));       // ID as double (safe)
+        lastDetections.push_back(static_cast<double>(pose.id));
         lastDetections.insert(lastDetections.end(), pose.translation, pose.translation + 3);
         lastDetections.insert(lastDetections.end(), pose.rotation, pose.rotation + 9);
     }
