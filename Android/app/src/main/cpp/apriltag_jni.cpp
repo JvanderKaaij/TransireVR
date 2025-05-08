@@ -23,6 +23,8 @@ static apriltag_family_t* tf = nullptr;
 static apriltag_detection_info_t info;
 static int tagCount;
 static std::vector<double> lastDetections;
+static ThreadPool pool(4);
+
 
 extern "C" __attribute__((visibility("default")))
 void start_camera_native(float tagsize, int tagFamily, int targetWidth, int targetHeight) {
@@ -76,10 +78,8 @@ void start_camera_native(float tagsize, int tagFamily, int targetWidth, int targ
 //    };
 
     // Create the pool (e.g., 4 threads)
-    ThreadPool pool(4);
-
-// Use it in your callback
-    cb.onFrame = [width, height, &pool](int64_t ts, std::vector<uint8_t> yuv) {
+    // Use it in your callback
+    cb.onFrame = [width, height](int64_t ts, std::vector<uint8_t> yuv) {
         pool.enqueue([yuv = std::move(yuv), width, height]() mutable {
             std::lock_guard<std::mutex> lock(apriltag_mutex);
             detect_apriltags(yuv.data(), width, height);
