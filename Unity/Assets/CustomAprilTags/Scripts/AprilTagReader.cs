@@ -61,6 +61,31 @@ public class AprilTagReader : MonoBehaviour
         _running = false;
     }
     
+    private void OnApplicationPause(bool paused)
+    {
+        if (paused)
+        {
+            m_aprilTagWrapper.StopCamera();
+            _running = false;
+            Debug.Log("App Paused - Disabling VR tracking...");
+        }
+        else
+        {
+            if(!_running){
+                StartAprilTagDetector();
+            }
+            Debug.Log("App Resumed - Re-enabling VR tracking...");
+        }
+    }
+
+    private void OnApplicationFocus(bool focus)
+    {
+        if (focus)
+        {
+            Debug.Log("App Gained Focus - Checking Tracking...");
+        }
+    }
+    
     void Update() {
         
         if (running){

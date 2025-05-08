@@ -32,7 +32,7 @@ namespace CustomAprilTags.Scripts
                 Vector3 predictedPos = filteredPos + currentVel * dt;
 
                 // Smooth the transition visually
-                currentPos = Vector3.Lerp(currentPos, predictedPos, 0.4f);
+                currentPos = Vector3.Lerp(currentPos, predictedPos, Mathf.Clamp01(1 - Mathf.Exp(-8f * dt)));
                 transform.position = currentPos;
 
                 transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, dt * smoothSpeed);

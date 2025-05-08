@@ -13,6 +13,7 @@
 #include <mutex>
 #include <time.h> // For clock_gettime
 #include <__thread/this_thread.h>
+#include "threadpool.h"
 
 static std::mutex apriltag_mutex;
 
@@ -60,17 +61,29 @@ void start_camera_native(float tagsize, int tagFamily, int targetWidth, int targ
         return;
     }
 
+    __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "About to start Init Detector!");
     init_detector(tagsize, tagFamily, leftCamConfig);
 
     Camera2Device::Callbacks cb;
-    cb.onFrame = [width, height](int64_t ts, std::vector<uint8_t> yuv) {
+//    cb.onFrame = [width, height](int64_t ts, std::vector<uint8_t> yuv) {
+//
+//        std::vector<uint8_t> yuv_copy = std::move(yuv);  // Move into local var
+//
+//        std::thread([yuv = std::move(yuv_copy), width, height]() mutable {
+//            std::lock_guard<std::mutex> lock(apriltag_mutex);
+//            detect_apriltags(yuv.data(), width, height);
+//        }).detach();
+//    };
 
-        std::vector<uint8_t> yuv_copy = std::move(yuv);  // Move into local var
+    // Create the pool (e.g., 4 threads)
+    ThreadPool pool(4);
 
-        std::thread([yuv = std::move(yuv_copy), width, height]() mutable {
+// Use it in your callback
+    cb.onFrame = [width, height, &pool](int64_t ts, std::vector<uint8_t> yuv) {
+        pool.enqueue([yuv = std::move(yuv), width, height]() mutable {
             std::lock_guard<std::mutex> lock(apriltag_mutex);
             detect_apriltags(yuv.data(), width, height);
-        }).detach();
+        });
     };
 
     cb.onError = [](const std::string& msg) {
@@ -87,13 +100,15 @@ void start_camera_native(float tagsize, int tagFamily, int targetWidth, int targ
         __android_log_print(ANDROID_LOG_ERROR, "AprilTagNative", "Unknown exception while starting camera");
     }
 
-    __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "About to start Init Detector!");
 
 }
 
 void init_detector(float tagsize, int tagFamily, Camera2Configuration config){
+    __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Initializing detector!");
+
     if (td != nullptr) return;  // already initialized
     td = apriltag_detector_create();
+
     if(tagFamily == 0){
         tf = tag16h5_create();
     }else if(tagFamily == 5){
@@ -116,6 +131,8 @@ void init_detector(float tagsize, int tagFamily, Camera2Configuration config){
     td->quad_decimate = 2.0;
     td->nthreads = 4;
     td->refine_edges = true;
+
+    __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Finish Initializing detector!");
 }
 
 int detect_apriltags(const uint8_t* grayscale_data, int width, int height) {
@@ -204,12 +221,42 @@ int count_apriltags(){
 
 extern "C" __attribute__((visibility("default")))
 void stop_camera_native() {
+
+    __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "STOP Native Camera");
+
+
+    // Stop and reset the camera
     if (camera) {
         camera->stop();
         camera = nullptr;
     }
+
+    // Shutdown the camera manager
     if (camManager) {
         camManager->shutdown();
         camManager = nullptr;
     }
+
+    // Free the detector and tag family
+    if (td) {
+        apriltag_detector_destroy(td);
+        td = nullptr;
+        __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Cleaned AprilTag Detector");
+    }
+
+    if (tf) {
+        if (info.tagsize == 0) {
+            tag16h5_destroy(tf);
+        } else if (info.tagsize == 5) {
+            tagStandard41h12_destroy(tf);
+        }
+        tf = nullptr;
+        __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Cleaned Tag Family");
+    }
+
+    // Clear the last detections and tag count
+    lastDetections.clear();
+    tagCount = 0;
+
+    __android_log_print(ANDROID_LOG_INFO, "AprilTagNative", "Camera and detector resources successfully cleaned up.");
 }

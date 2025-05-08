@@ -19,6 +19,8 @@ public class AprilTagWrapper : MonoBehaviour
     [DllImport("apriltagnative")]
     private static extern void start_camera_native(float tagsize, int tagFamily, int width, int height);
     
+    [DllImport("apriltagnative")]
+    private static extern void stop_camera_native();
     
     [DllImport("apriltagnative")]
     private static extern bool is_camera_ready();
@@ -43,6 +45,11 @@ public class AprilTagWrapper : MonoBehaviour
     public void Init(float tagsize, AprilTagFamily family, int width, int height)
     {
         start_camera_native(tagsize, returnStringFromTagFamilyEnum(family), width, height);
+    }
+
+    public void StopCamera()
+    {
+        stop_camera_native();
     }
     
     public List<AprilTagPose> GetLatestPoses()
