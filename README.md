@@ -8,4 +8,4 @@
 ---
 To see an example check in `Unity/Assets/CustomAprilTags/CustomAprilTags.scene`
 
-[![Watch the video](https://surfdrive.surf.nl/files/index.php/s/R4HYveRjQKcQdCH)]
+[Watch example video](https://surfdrive.surf.nl/files/index.php/s/R4HYveRjQKcQdCH)
