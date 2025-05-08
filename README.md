@@ -4,5 +4,6 @@
 
 `/Android` contains the native Android Studio & Java Native Interface (JNI) code expsoing Apriltags to Unity.
 
-#### Android
+#### Unity Example
 ---
+To see an example check in `Unity/Assets/CustomAprilTags/CustomAprilTags.scene`
